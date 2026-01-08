@@ -1,0 +1,205 @@
+openapi: 3.0.3
+info:
+  title: AgentTrust Gateway - Public API
+  version: 0.1.0
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness
+      responses:
+        "200":
+          description: OK
+
+  /readyz:
+    get:
+      summary: Readiness
+      responses:
+        "200":
+          description: OK
+
+  /v1/agent/decisions/evaluate:
+    post:
+      summary: Evaluate an agent-initiated commerce action
+      description: |
+        Public data-plane entry point.
+        Requires RFC 9421 HTTP Message Signature headers and a scoped permission token.
+        Supports Idempotency-Key for safe retries.
+      security:
+        - ScopedTokenHeader: []
+      parameters:
+        - in: header
+          name: Signature-Input
+          required: true
+          schema:
+            type: string
+          description: RFC 9421 Signature-Input header.
+        - in: header
+          name: Signature
+          required: true
+          schema:
+            type: string
+          description: RFC 9421 Signature header.
+        - in: header
+          name: Content-Digest
+          required: true
+          schema:
+            type: string
+          description: >
+            HTTP Content-Digest header (required when a body is present). MUST be covered by the RFC 9421 signature.
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            description: "Unique per logical request. Recommended: UUID v4."
+          description: Idempotency key for safe retries and deduplication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionEvaluateRequest"
+      responses:
+        "200":
+          description: Decision result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionEvaluateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  securitySchemes:
+    ScopedTokenHeader:
+      type: apiKey
+      in: header
+      name: X-Scoped-Token
+
+  schemas:
+    DecisionEvaluateRequest:
+      type: object
+      required: [action, amount, currency]
+      properties:
+        action:
+          type: string
+          description: Requested commerce action. MVP supports PURCHASE only.
+          enum: [PURCHASE]
+          example: PURCHASE
+        amount:
+          type: integer
+          format: int64
+          description: Minor units (e.g., cents). Must be >= 0.
+          minimum: 0
+          example: 1299
+        currency:
+          type: string
+          description: ISO 4217 currency code (3-letter uppercase).
+          pattern: "^[A-Z]{3}$"
+          example: USD
+        correlationId:
+          type: string
+          nullable: true
+          description: Optional client correlation id for linking logs/traces across systems (not used for idempotency).
+          example: corr_abc123
+        checkoutReference:
+          type: string
+          nullable: true
+          description: Non-tenant business reference (order/cart/checkout id). Not used for tenant resolution.
+          example: order_9f2c1a
+
+    DecisionEvaluateResponse:
+      type: object
+      required: [decision, decisionId]
+      properties:
+        decision:
+          type: string
+          enum: [ALLOW, CHALLENGE, DENY]
+        decisionId:
+          type: string
+          example: dec_01HXYZ...
+        tokenId:
+          type: string
+          nullable: true
+          description: Token identifier (not the raw token).
+        reasonCode:
+          type: string
+          nullable: true
+        explanation:
+          type: string
+          nullable: true
+        citations:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              chunkId:
+                type: string
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        traceId:
+          type: string
+          description: Trace identifier for server-side debugging.
+        correlationId:
+          type: string
+          nullable: true
+          description: Client correlation id if provided (request body correlationId).
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Echo of the Idempotency-Key header when provided.
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Forbidden:
+      description: Not authorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
