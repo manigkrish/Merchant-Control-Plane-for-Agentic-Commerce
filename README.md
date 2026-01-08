@@ -114,6 +114,5 @@ Enable the pre-commit hook to block accidental secret commits:
 
 ```bash
 git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit
-tools/precommit/no-secrets.sh
+chmod +x .githooks/pre-commit tools/precommit/no-secrets.sh
 ```

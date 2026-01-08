@@ -72,7 +72,7 @@ Conventions:
    - `Signature-Input`
    - `Signature`
    - `Content-Digest` (required when body present)
-   - `X-Scoped-Token` (required for data-plane endpoints, e.g., `POST /v1/decisions:evaluate`)
+   - `X-Scoped-Token` (required for data-plane endpoints, e.g., `POST /v1/agent/decisions:evaluate`)
 
 2) Confirm client clock skew (common root cause):
    - If `created/expires` are outside the allowed window (default 8 minutes), verification must fail.

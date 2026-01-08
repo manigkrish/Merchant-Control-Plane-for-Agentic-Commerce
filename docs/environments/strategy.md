@@ -2,7 +2,7 @@
 
 Region: us-east-2 (Ohio)
 
-This project define four environments:
+This project defines four environments:
 
 ## 1) local
 - docker-compose stack (Postgres, Redis, Kafka, S3-compatible storage)

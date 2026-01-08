@@ -1,3 +1,5 @@
+# Architecture diagram
+
 ```mermaid
 flowchart LR
   subgraph Clients

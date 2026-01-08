@@ -1,6 +1,6 @@
 # Testing Strategy
 
-This project test at four levels:
+This project tests at four levels:
 
 ## 1) Unit tests (per service)
 - Pure logic tests (token scope checks, decision rules, signature parsing helpers)
