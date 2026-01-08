@@ -51,7 +51,7 @@ These defaults are intentionally conservative for local/staging/prod-lite. Adjus
 
 ### Postgres / Redis sizing
 - Prefer query limits + indexing before scaling instance size
-- Redis nonce replay TTL: 10 minutes (matches signature time window)
+- Redis nonce replay TTL: 10 minutes (window=8 minutes + skew buffer).
 - Rate-limits: per-tenant + per-agent key (documented in gateway controls)
 
 ### Observability cost control

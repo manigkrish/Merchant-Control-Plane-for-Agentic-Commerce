@@ -21,7 +21,7 @@ paths:
         "200":
           description: OK
 
-  /v1/agent/decisions:evaluate:
+  /v1/agent/decisions/evaluate:
     post:
       summary: Evaluate an agent-initiated commerce action
       description: |
@@ -55,6 +55,9 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 16
+            maxLength: 128
+            description: "Unique per logical request. Recommended: UUID v4."
           description: Idempotency key for safe retries and deduplication.
       requestBody:
         required: true
@@ -92,13 +95,19 @@ components:
       properties:
         action:
           type: string
+          description: Requested commerce action. MVP supports PURCHASE only.
+          enum: [PURCHASE]
           example: PURCHASE
         amount:
           type: integer
-          description: Minor units (e.g., cents)
+          format: int64
+          description: Minor units (e.g., cents). Must be >= 0.
+          minimum: 0
           example: 1299
         currency:
           type: string
+          description: ISO 4217 currency code (3-letter uppercase).
+          pattern: "^[A-Z]{3}$"
           example: USD
         correlationId:
           type: string

@@ -50,12 +50,19 @@ components:
       properties:
         action:
           type: string
+          description: Requested commerce action. MVP supports PURCHASE only.
+          enum: [PURCHASE]
           example: PURCHASE
         amount:
           type: integer
+          format: int64
+          description: Minor units (e.g., cents). Must be >= 0.
+          minimum: 0
           example: 1299
         currency:
           type: string
+          description: ISO 4217 currency code (3-letter uppercase).
+          pattern: "^[A-Z]{3}$"
           example: USD
         idempotencyKey:
           type: string

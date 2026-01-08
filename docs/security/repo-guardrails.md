@@ -32,4 +32,4 @@ Repository Settings → Branches:
 ## Incident response (if a secret leaks)
 1. Immediately rotate/revoke the credential.
 2. Remove secret from git history (requires care), and open a postmortem.
-3. Add pattern to prevent reoccurrence.
+3. Add pattern to prevent recurrence.
