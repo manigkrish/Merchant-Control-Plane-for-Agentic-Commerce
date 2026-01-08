@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: AgentTrust Admin Service - Control Plane API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8081
+
+paths:
+  /v1/admin/tenants:
+    post:
+      summary: Create tenant (merchant)
+      description: Control plane endpoint. Requires admin JWT.
+      security:
+        - AdminBearerJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+      responses:
+        "201":
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTenantResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    AdminBearerJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateTenantRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          example: "Demo Merchant"
+        externalReference:
+          type: string
+          nullable: true
+          description: Optional external id for the merchant in another system.
+          example: "merchant_123"
+
+    CreateTenantResponse:
+      type: object
+      required: [tenantId]
+      properties:
+        tenantId:
+          type: string
+          example: "tnt_01HXYZ..."
+        displayName:
+          type: string
+          example: "Demo Merchant"
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        traceId:
+          type: string
+          description: Trace identifier for server-side debugging.
+        correlationId:
+          type: string
+          nullable: true
+          description: Client correlation id if provided.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Echo of an idempotency key when available (not required for admin APIs).
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Forbidden:
+      description: Not authorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"

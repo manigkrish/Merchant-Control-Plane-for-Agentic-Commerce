@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-commit] Running local no-secrets scan..."
+tools/precommit/no-secrets.sh
+echo "[pre-commit] OK"

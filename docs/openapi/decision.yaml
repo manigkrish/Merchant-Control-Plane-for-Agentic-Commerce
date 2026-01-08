@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: AgentTrust Decision Service - Internal API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8083
+
+paths:
+  /internal/v1/decisions:
+    post:
+      summary: Compute deterministic decision (internal)
+      description: |
+        Internal API. Tenant context is derived from verified upstream identity / internal auth.
+        This API does not accept tenantId as a request parameter.
+      security:
+        - InternalBearerJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InternalDecisionRequest"
+      responses:
+        "200":
+          description: Decision computed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalDecisionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  securitySchemes:
+    InternalBearerJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    InternalDecisionRequest:
+      type: object
+      required: [action, amount, currency, idempotencyKey]
+      properties:
+        action:
+          type: string
+          example: PURCHASE
+        amount:
+          type: integer
+          example: 1299
+        currency:
+          type: string
+          example: USD
+        idempotencyKey:
+          type: string
+          description: Idempotency key propagated from edge (derived from Idempotency-Key header).
+          example: idem_abc123
+        correlationId:
+          type: string
+          nullable: true
+          description: Optional correlation id for cross-service tracing (not used for idempotency).
+          example: corr_abc123
+        policyVersion:
+          type: string
+          nullable: true
+          description: Optional policy version pin for deterministic evaluation.
+
+    InternalDecisionResponse:
+      type: object
+      required: [decision, decisionId]
+      properties:
+        decision:
+          type: string
+          enum: [ALLOW, CHALLENGE, DENY]
+        decisionId:
+          type: string
+          example: dec_01HXYZ...
+        tokenId:
+          type: string
+          nullable: true
+        reasonCode:
+          type: string
+          nullable: true
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        traceId:
+          type: string
+          description: Trace identifier for server-side debugging.
+        correlationId:
+          type: string
+          nullable: true
+          description: Client correlation id if provided.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Echo of the idempotency key when available.
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Forbidden:
+      description: Not authorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
