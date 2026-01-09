@@ -113,9 +113,6 @@ agenttrust-gateway/
 │
 ├─ libs/
 │  ├─ platform-web/
-│  ├─ common-security/
-│  ├─ common-events/
-│  └─ common-observability/
 │
 ├─ services/
 │  ├─ gateway-service/
