@@ -6,6 +6,14 @@
 
   <modelVersion>4.0.0</modelVersion>
 
+  <!-- Spring Boot parent provides dependency & plugin management -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.9</version>
+    <relativePath/>
+  </parent>
+
   <groupId>com.agenttrust</groupId>
   <artifactId>agenttrust-gateway-parent</artifactId>
   <version>0.0.1-SNAPSHOT</version>
@@ -15,10 +23,45 @@
   <description>Parent build for AgentTrust Gateway monorepo (services, libs, workers, infra).</description>
 
   <properties>
+    <java.version>21</java.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
-  <!-- Sprint 0: no modules yet. Modules will be added starting Sprint 1. -->
+  <modules>
+    <module>libs/platform-web</module>
+    <module>services/gateway-service</module>
+    <module>services/admin-service</module>
+  </modules>
+
+  <build>
+    <plugins>
+      <!-- Fail fast if the toolchain is wrong (important for a public repo + CI) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>enforce-toolchain</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[21,)</version>
+                </requireJavaVersion>
+                <requireMavenVersion>
+                  <version>[3.8.6,)</version>
+                </requireMavenVersion>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
