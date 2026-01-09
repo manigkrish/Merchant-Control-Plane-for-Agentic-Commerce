@@ -32,3 +32,15 @@ terraform.rc
 # Local infra / data
 data/
 tmp/
+
+# --- Environment files (never commit secrets) ---
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!*.env.example
+!infra/docker-compose/.env.example
+
+# --- Windows "Zone.Identifier" metadata (never commit) ---
+*:Zone.Identifier
