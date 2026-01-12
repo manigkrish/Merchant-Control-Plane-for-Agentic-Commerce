@@ -112,10 +112,7 @@ agenttrust-gateway/
 │     └─ strategy.md
 │
 ├─ libs/
-│  ├─ common-web/
-│  ├─ common-security/
-│  ├─ common-events/
-│  └─ common-observability/
+│  ├─ platform-web/
 │
 ├─ services/
 │  ├─ gateway-service/

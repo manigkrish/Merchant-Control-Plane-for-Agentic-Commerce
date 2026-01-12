@@ -1,5 +1,6 @@
 package com.agenttrust.admin;
 
+import com.agenttrust.admin.testsupport.PostgresTestContainerSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -11,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc(addFilters = true)
-class AdminSmokeTest {
+class AdminSmokeTest extends PostgresTestContainerSupport {
 
     @Autowired
     private MockMvc mockMvc;
@@ -34,6 +35,7 @@ class AdminSmokeTest {
                 .andExpect(content().contentType("application/json"))
                 .andExpect(jsonPath("$.status").value("ready"))
                 .andExpect(jsonPath("$.service").value("admin-service"))
+                .andExpect(jsonPath("$.checks.database").value("up"))
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(header().exists("traceparent"));
     }
