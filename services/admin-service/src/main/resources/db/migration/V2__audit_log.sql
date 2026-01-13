@@ -17,4 +17,4 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_time
   ON audit_log (tenant_id, occurred_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_event_time
-  ON audit_log (event_type, occurred_at DESC);
+  ON audit_log (event_type, tenant_id, occurred_at DESC);

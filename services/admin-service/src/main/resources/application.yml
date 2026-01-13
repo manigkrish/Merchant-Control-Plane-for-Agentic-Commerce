@@ -49,3 +49,6 @@ agenttrust:
   auth:
     jwt:
       ttl-seconds: 900 # 15 minutes
+      issuer: ${ADMIN_JWT_ISSUER:agenttrust-admin}
+      keystore:
+        path: ${ADMIN_JWT_KEYSTORE_PATH:.local/keys/admin-jwt.jks}

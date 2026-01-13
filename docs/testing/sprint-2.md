@@ -61,7 +61,7 @@ From repo root:
 
 ```bash
 make test
-````
+```
 
 ### Run only admin-service tests
 
