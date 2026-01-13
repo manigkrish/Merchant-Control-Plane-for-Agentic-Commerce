@@ -5,6 +5,7 @@ spring:
   application:
     name: admin-service
 
+<<<<<<< HEAD
   datasource:
     url: ${ADMIN_DB_URL:jdbc:postgresql://localhost:5432/agenttrust}
     username: ${POSTGRES_USER:agenttrust}
@@ -22,6 +23,8 @@ spring:
     properties:
       hibernate.jdbc.time_zone: UTC
 
+=======
+>>>>>>> main
 management:
   endpoints:
     web:
@@ -41,6 +44,7 @@ management:
 logging:
   level:
     root: INFO
+<<<<<<< HEAD
 
 agenttrust:
   tenancy:
@@ -49,3 +53,5 @@ agenttrust:
   auth:
     jwt:
       ttl-seconds: 900 # 15 minutes
+=======
+>>>>>>> main

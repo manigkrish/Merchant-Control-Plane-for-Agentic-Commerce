@@ -17,7 +17,11 @@
   <packaging>jar</packaging>
 
   <name>AgentTrust Admin Service</name>
+<<<<<<< HEAD
   <description>Control plane service for /v1/admin/* endpoints (Sprint 2: auth + tenancy + persistence).</description>
+=======
+  <description>Control plane service for /v1/admin/* endpoints (Sprint 1: health + error model).</description>
+>>>>>>> main
 
   <dependencies>
     <!-- Shared platform web primitives (Problem Details, tracing/correlation helpers, etc.) -->
@@ -33,6 +37,7 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+<<<<<<< HEAD
     <!-- Security: JWT auth + RBAC enforcement -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -62,6 +67,8 @@
       <scope>runtime</scope>
     </dependency>
 
+=======
+>>>>>>> main
     <!-- JSON logging encoder (used only when we enable prod profile in logback-spring.xml) -->
     <dependency>
       <groupId>net.logstash.logback</groupId>
@@ -75,6 +82,7 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+<<<<<<< HEAD
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-test</artifactId>
@@ -106,6 +114,10 @@
     </dependencies>
   </dependencyManagement>-->
 
+=======
+  </dependencies>
+
+>>>>>>> main
   <build>
     <plugins>
       <plugin>
