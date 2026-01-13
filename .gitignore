@@ -33,6 +33,10 @@ terraform.rc
 data/
 tmp/
 
+# Local-only secrets / keystores (must never be committed)
+.local/
+.local/**
+
 # --- Environment files (never commit secrets) ---
 .env
 .env.*

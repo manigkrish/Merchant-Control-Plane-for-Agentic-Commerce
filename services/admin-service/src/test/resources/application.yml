@@ -1,0 +1,10 @@
+# Test-only defaults.
+# DynamicPropertySource (Testcontainers) will still control datasource settings.
+agenttrust:
+  auth:
+    jwt:
+      issuer: agenttrust-admin-test
+      ttl-seconds: 900
+      keystore:
+        # Use a unique path per Spring test context to avoid collisions.
+        path: target/test-keys/admin-jwt-${random.uuid}
