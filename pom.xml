@@ -61,7 +61,6 @@
           </execution>
         </executions>
       </plugin>
-<<<<<<< HEAD
 
       <!-- Ensure integration tests named *IT.java run as part of mvn test -->
       <plugin>
@@ -76,8 +75,6 @@
           </includes>
         </configuration>
       </plugin>
-=======
->>>>>>> main
     </plugins>
   </build>
 

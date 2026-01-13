@@ -72,7 +72,6 @@ This repository is built sprint-by-sprint toward these capabilities:
 - Automated smoke tests:
   - Gateway: health + Problem Details behavior end-to-end
   - Admin: health + correlation/trace headers present
-<<<<<<< HEAD
 
 ### Sprint 2
 - **Control-plane auth MVP (Option A)**
@@ -96,8 +95,6 @@ This repository is built sprint-by-sprint toward these capabilities:
 - **Test posture hardened**
   - Admin tests use Testcontainers Postgres
   - Test key material is isolated under `target/` (no `.local/keys` dependency)
-=======
->>>>>>> main
 
 ---
 
@@ -135,13 +132,9 @@ agenttrust-gateway/
 │  ├─ environments/
 │  ├─ runbooks/
 │  └─ testing/
-<<<<<<< HEAD
 │     ├─ strategy.md
 │     ├─ sprint-1.md
 │     └─ sprint-2.md
-=======
-│     └─ strategy.md
->>>>>>> main
 │
 ├─ libs/
 │  ├─ platform-web/
@@ -253,26 +246,20 @@ Gateway (port 8080):
 make run-gateway
 ```
 
-<<<<<<< HEAD
 Admin (port 8081)
 
 In another terminal:
-=======
 Admin (port 8081) in another terminal:
->>>>>>> main
 
 ```bash
 make run-admin
 ```
 
-<<<<<<< HEAD
 If you need to bootstrap the platform admin (first run on a clean DB), configure:
 - `agenttrust.auth.bootstrap-admin.username`
 - `agenttrust.auth.bootstrap-admin.password`
 You can supply them via env vars or a local-only config mechanism. After bootstrapping, only the password hash is stored in DB.
 
-=======
->>>>>>> main
 ---
 
 ## Health endpoints
@@ -288,7 +275,7 @@ Examples:
 curl -sS http://localhost:8080/healthz | jq .
 curl -sS http://localhost:8081/healthz | jq .
 ```
-<<<<<<< HEAD
+
 Note: `admin-service` readiness is designed to fail if the database is unavailable.
 
 ---
@@ -358,20 +345,17 @@ Example query (local Postgres):
 psql "postgresql://agenttrust:agenttrust@localhost:5432/agenttrust" \
   -c "select event_type, tenant_id, actor_subject, correlation_id, occurred_at, payload_json from audit_log order by occurred_at desc limit 10;"
 ```
-=======
->>>>>>> main
 
 ---
 
 ## Error model (RFC 9457 Problem Details)
 
 All services standardize errors as `application/problem+json` with a Problem Details body.
-<<<<<<< HEAD
+
 Sprint 1 includes a gateway-only verification endpoint:
 - `GET /__debug/problem`
 
 Test it:
-=======
 
 Sprint 1 includes a gateway-only verification endpoint:
 
@@ -379,7 +363,6 @@ Sprint 1 includes a gateway-only verification endpoint:
 
 Test it:
 
->>>>>>> main
 ```bash
 curl -sS -D - http://localhost:8080/__debug/problem -o /tmp/problem.json
 cat /tmp/problem.json | jq .
@@ -404,22 +387,18 @@ Run all tests:
 make test
 ```
 
-<<<<<<< HEAD
 Run admin-service tests only:
 
 ```bash
 mvn -q -pl services/admin-service -am test
 ```
 
-=======
->>>>>>> main
 What Sprint 1 tests validate:
 
 - Gateway health endpoints
 - Gateway RFC 9457 Problem Details behavior and correlation/trace invariants
 - Admin health endpoints and correlation/trace header presence
 
-<<<<<<< HEAD
 What Sprint 2 tests validate:
 
 - Admin auth login issues JWT and JWKS is served
@@ -434,8 +413,6 @@ See:
 - `docs/testing/sprint-1.md`
 - `docs/testing/sprint-2.md`
 
-=======
->>>>>>> main
 ---
 
 ## Standards and source-of-truth docs
@@ -470,10 +447,7 @@ See:
 
 ## Roadmap (high level)
 
-<<<<<<< HEAD
-=======
 - Internal auth (JWT + JWKS) and tenant derivation
->>>>>>> main
 - Attestation verification service + Redis replay cache
 - Agent registry (key resolution and rotation)
 - Scoped token service + lifecycle events (Kafka/CloudEvents)
