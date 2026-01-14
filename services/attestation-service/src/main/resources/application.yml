@@ -1,0 +1,71 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: attestation-service
+
+  data:
+    redis:
+      host: ${ATTESTATION_REDIS_HOST:redis}
+      port: ${ATTESTATION_REDIS_PORT:6379}
+      timeout: ${ATTESTATION_REDIS_TIMEOUT:2s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,metrics,prometheus"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.agenttrust: INFO
+
+agenttrust:
+  attestation:
+    profile:
+      # Body is not supported yet; Content-Digest is therefore not required.
+      bodyless: true
+
+      requiredSignatureParams:
+        - keyid
+        - alg
+        - created
+        - expires
+        - nonce
+        - tag
+
+      requiredCoveredComponents:
+        - "@authority"
+        - "@path"
+        - "@signature-params"
+
+      allowedAlgorithms:
+        - ed25519
+
+      maxWindowSeconds: 480
+
+    replay:
+      enabled: true
+      keyPrefix: "replay"
+      defaultTtlSeconds: 480
+
+    keys:
+      # Bootstrap YAML key registry (tenant-scoped). Store PUBLIC keys only.
+      registry:
+        entries:
+          - tenantId: "__platform__"
+            keyId: "dev-ed25519-1"
+            status: "ACTIVE"
+            # Base64-encoded raw Ed25519 public key (32 bytes), no PEM.
+            publicKeyBase64: "REPLACE_ME_BASE64_PUBLIC_KEY"
+            # Optional: ISO-8601 timestamp; if set, key is invalid after this instant.
+            # notAfter: "2026-12-31T23:59:59Z"
