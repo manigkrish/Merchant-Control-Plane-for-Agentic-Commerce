@@ -1,5 +1,8 @@
 package com.agenttrust.attestation.api;
 
+import com.agenttrust.attestation.verify.AttestationVerifierService;
+import com.agenttrust.attestation.verify.AttestationVerifierService.FailureCode;
+import com.agenttrust.attestation.verify.AttestationVerifierService.VerifyOutcome;
 import com.agenttrust.platform.web.problem.ProblemDetails;
 import com.agenttrust.platform.web.problem.ProblemMediaTypes;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,8 +23,14 @@ public class AttestationVerifyController {
   private static final MediaType PROBLEM_JSON =
       MediaType.valueOf(ProblemMediaTypes.APPLICATION_PROBLEM_JSON);
 
-  private static final URI TYPE_NOT_IMPLEMENTED =
-      URI.create("https://agenttrust.dev/problems/attestation-not-implemented");
+  private static final URI TYPE_ATTESTATION_FAILED =
+      URI.create("https://agenttrust.dev/problems/attestation-failed");
+
+  private final AttestationVerifierService verifier;
+
+  public AttestationVerifyController(AttestationVerifierService verifier) {
+    this.verifier = verifier;
+  }
 
   @PostMapping(
       value = "/verify",
@@ -31,26 +40,57 @@ public class AttestationVerifyController {
   public ResponseEntity<?> verify(@Valid @RequestBody AttestationDtos.VerifyRequest body,
                                   HttpServletRequest request) {
 
-    // Internal-only endpoint: tenantId is derived by gateway and passed in the internal request.
-    // We attach it to request attributes so RFC 9457 responses can include tenantId consistently.
     request.setAttribute("agenttrust.tenantId", body.tenantId());
 
+    VerifyOutcome outcome = verifier.verify(body);
+    if (outcome.verified()) {
+      return ResponseEntity.ok(new AttestationDtos.VerifyResponse(true));
+    }
+
+    FailureCode code = outcome.failure().code();
+    HttpStatus status = mapHttpStatus(code);
+    String errorCode = mapErrorCode(code);
+
     ProblemDetails problem = new ProblemDetails(
-        TYPE_NOT_IMPLEMENTED,
-        "Attestation verification not implemented",
-        HttpStatus.NOT_IMPLEMENTED.value(),
-        "Verifier engine will be wired in subsequent Sprint 3 steps.",
+        TYPE_ATTESTATION_FAILED,
+        "Attestation verification failed",
+        status.value(),
+        outcome.failure().message(),
         toInstanceUri(request),
-        "ATTESTATION_NOT_IMPLEMENTED",
+        errorCode,
         attr(request, "agenttrust.traceId"),
         attr(request, "agenttrust.requestId"),
         body.tenantId()
     );
 
     return ResponseEntity
-        .status(HttpStatus.NOT_IMPLEMENTED)
+        .status(status)
         .contentType(PROBLEM_JSON)
         .body(problem);
+  }
+
+  private static HttpStatus mapHttpStatus(FailureCode code) {
+    return switch (code) {
+      case ATTESTATION_MISSING_OR_INVALID, ATTESTATION_MISSING_COMPONENT -> HttpStatus.BAD_REQUEST;
+      case ATTESTATION_REPLAY_DETECTED -> HttpStatus.CONFLICT;
+      case ATTESTATION_REPLAY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+      case ATTESTATION_INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
+      default -> HttpStatus.UNAUTHORIZED;
+    };
+  }
+
+  private static String mapErrorCode(FailureCode code) {
+    return switch (code) {
+      case ATTESTATION_MISSING_OR_INVALID -> "ATTESTATION_INVALID_REQUEST";
+      case ATTESTATION_MISSING_COMPONENT -> "ATTESTATION_MISSING_COMPONENT";
+      case ATTESTATION_TIMESTAMP_INVALID -> "ATTESTATION_TIMESTAMP_INVALID";
+      case ATTESTATION_KEY_UNAVAILABLE -> "ATTESTATION_KEY_UNAVAILABLE";
+      case ATTESTATION_TENANT_KEY_MISMATCH -> "ATTESTATION_TENANT_KEY_MISMATCH";
+      case ATTESTATION_INVALID_SIGNATURE -> "ATTESTATION_INVALID_SIGNATURE";
+      case ATTESTATION_REPLAY_DETECTED -> "ATTESTATION_REPLAY_DETECTED";
+      case ATTESTATION_REPLAY_UNAVAILABLE -> "ATTESTATION_REPLAY_UNAVAILABLE";
+      case ATTESTATION_INTERNAL_ERROR -> "ATTESTATION_INTERNAL_ERROR";
+    };
   }
 
   private static String attr(HttpServletRequest request, String key) {

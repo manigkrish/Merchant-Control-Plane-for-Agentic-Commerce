@@ -46,9 +46,15 @@ public final class ReplayProtectionService {
       if (Boolean.FALSE.equals(wasSet)) {
         return Result.REPLAY_DETECTED;
       }
+
+      log.warn("Replay cache unavailable (redis). Failing closed.");
       return Result.UNAVAILABLE;
     } catch (Exception ex) {
-      log.warn("Replay cache unavailable (redis). Failing closed.", ex);
+      if (log.isDebugEnabled()) {
+        log.debug("Replay cache unavailable (redis). Failing closed.", ex);
+      } else {
+        log.warn("Replay cache unavailable (redis). Failing closed.");
+      }
       return Result.UNAVAILABLE;
     }
   }
