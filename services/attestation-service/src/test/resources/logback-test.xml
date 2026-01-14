@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Keep your code visible if you want -->
+  <logger name="com.agenttrust" level="INFO"/>
+
+  <!-- Silence noisy frameworks in tests -->
+  <logger name="org.springframework" level="WARN"/>
+  <logger name="org.apache" level="WARN"/>
+  <logger name="org.hibernate.validator" level="WARN"/>
+
+  <!-- Silence the intentional replay/redis failure logs -->
+  <logger name="com.agenttrust.attestation.replay" level="ERROR"/>
+
+  <!-- Testcontainers / networking noise -->
+  <logger name="org.testcontainers" level="WARN"/>
+  <logger name="tc" level="WARN"/>
+  <logger name="io.lettuce" level="ERROR"/>
+  <logger name="io.netty" level="ERROR"/>
+
+  <!-- Make root quiet -->
+  <root level="WARN">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>
