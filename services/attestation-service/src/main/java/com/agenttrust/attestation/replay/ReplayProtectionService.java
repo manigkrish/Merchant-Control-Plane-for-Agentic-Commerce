@@ -2,10 +2,14 @@ package com.agenttrust.attestation.replay;
 
 import java.time.Duration;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 public final class ReplayProtectionService {
+
+  private static final Logger log = LoggerFactory.getLogger(ReplayProtectionService.class);
 
   public enum Result {
     FIRST_SEEN,
@@ -44,6 +48,7 @@ public final class ReplayProtectionService {
       }
       return Result.UNAVAILABLE;
     } catch (Exception ex) {
+      log.warn("Replay cache unavailable (redis). Failing closed.", ex);
       return Result.UNAVAILABLE;
     }
   }

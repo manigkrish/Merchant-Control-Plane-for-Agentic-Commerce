@@ -18,7 +18,7 @@ public final class AttestationDtos {
 
   public record VerifyRequest(
       @NotBlank
-      @Size(max = 16)
+      @Size(max = 32)
       String method,
 
       @NotBlank

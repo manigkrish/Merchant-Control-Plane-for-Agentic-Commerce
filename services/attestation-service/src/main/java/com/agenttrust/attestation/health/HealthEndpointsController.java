@@ -1,6 +1,8 @@
 package com.agenttrust.attestation.health;
 
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -10,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HealthEndpointsController {
+
+  private static final Logger log = LoggerFactory.getLogger(HealthEndpointsController.class);
 
   private final StringRedisTemplate redisTemplate;
 
@@ -44,6 +48,7 @@ public class HealthEndpointsController {
           "dependency", "redis"
       ));
     } catch (Exception ex) {
+      log.warn("Readiness check failed: Redis not reachable.", ex);
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
           "status", "not_ready",
           "dependency", "redis",

@@ -51,9 +51,8 @@ public final class YamlPublicKeyResolver implements PublicKeyResolver {
         .filter(e -> notBlank(e.getTenantId()) && notBlank(e.getKeyId()))
         .collect(Collectors.toUnmodifiableMap(
             e -> new CompositeKey(e.getTenantId(), e.getKeyId()),
-            e -> e,
-            (a, b) -> a // if duplicates exist, keep first deterministically
-        ));
+            e -> e
+       ));
 
     this.byKeyId = entries.stream()
         .filter(e -> notBlank(e.getKeyId()))
