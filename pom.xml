@@ -32,6 +32,7 @@
     <module>libs/platform-web</module>
     <module>services/gateway-service</module>
     <module>services/admin-service</module>
+    <module>services/attestation-service</module>
   </modules>
 
   <build>
