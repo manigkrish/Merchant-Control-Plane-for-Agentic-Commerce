@@ -27,7 +27,10 @@ public class AgentVerifyController {
     this.attestationClient = attestationClient;
   }
 
-  @PostMapping(path = "/v1/agent/verify", produces = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(
+      path = "/v1/agent/verify",
+      produces = {MediaType.APPLICATION_JSON_VALUE, ProblemMediaTypes.APPLICATION_PROBLEM_JSON}
+  )
   public ResponseEntity<?> verify(HttpServletRequest request) {
     String signatureInput = headerRequired(request, "Signature-Input");
     String signature = headerRequired(request, "Signature");

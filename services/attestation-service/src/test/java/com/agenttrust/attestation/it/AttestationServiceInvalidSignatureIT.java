@@ -2,7 +2,6 @@ package com.agenttrust.attestation.it;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.agenttrust.attestation.api.AttestationDtos;
 import com.agenttrust.attestation.rfc9421.Rfc9421SignatureBaseBuilder;
 import com.agenttrust.attestation.rfc9421.Rfc9421SignatureInput;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,7 +59,6 @@ class AttestationServiceInvalidSignatureIT {
 
       // Keypair A: registry/trusted key (public key injected into registry)
       KeyPair registryKeyPair = kpg.generateKeyPair();
-      TestKeyHolder.setRegistryKeyPair(registryKeyPair);
 
       byte[] spki = registryKeyPair.getPublic().getEncoded();
       byte[] raw = new byte[32];
@@ -142,22 +140,21 @@ class AttestationServiceInvalidSignatureIT {
     byte[] signatureBytes = signEd25519WithWrongKey(signatureBase);
     String signatureHeader = "sig1=:" + Base64.getEncoder().encodeToString(signatureBytes) + ":";
 
-    // IMPORTANT: Match your real DTO constructor order (same as your Redis IT).
-    AttestationDtos.VerifyRequest req = new AttestationDtos.VerifyRequest(
-        "POST",
-        authority,
-        path,
-        TENANT_ID,
-        sigInputHeader,
-        signatureHeader
-    );
+    String jsonRequest = objectMapper.createObjectNode()
+        .put("method", "POST")
+        .put("authority", authority)
+        .put("path", path)
+        .put("tenantId", TENANT_ID)
+        .put("signatureInput", sigInputHeader)
+        .put("signature", signatureHeader)
+        .toString();
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setAccept(List.of(MediaType.APPLICATION_JSON, MediaType.valueOf("application/problem+json")));
 
     ResponseEntity<String> resp =
-        rest.postForEntity(url("/v1/attestations/verify"), new HttpEntity<>(req, headers), String.class);
+        rest.postForEntity(url("/v1/attestations/verify"), new HttpEntity<>(jsonRequest, headers), String.class);
 
     assertEquals(401, resp.getStatusCode().value());
 
@@ -169,6 +166,9 @@ class AttestationServiceInvalidSignatureIT {
 
     assertNotNull(errorCode, "Expected errorCode field but body was: " + body);
     assertEquals("ATTESTATION_INVALID_SIGNATURE", errorCode, "Body was: " + body);
+
+    String tenantId = json.path("tenantId").asText(null);
+    assertEquals(TENANT_ID, tenantId, "Body was: " + body);
   }
 
   private String url(String p) {
@@ -185,10 +185,6 @@ class AttestationServiceInvalidSignatureIT {
 
   static final class TestKeyHolder {
     private static volatile KeyPair SIGNING_KEY_PAIR;
-
-    static void setRegistryKeyPair(KeyPair ignored) {
-      // Intentionally not used in this test after we derive PUBLIC_KEY_RAW_BASE64.
-    }
 
     static void setSigningKeyPair(KeyPair kp) {
       SIGNING_KEY_PAIR = kp;
