@@ -24,3 +24,12 @@ management:
 logging:
   level:
     root: INFO
+
+agenttrust:
+  gateway:
+    tenancy:
+      host-to-tenant:
+        # Local/dev mapping. Replace with your real merchant hostnames later.
+        merchant.local: "__platform__"
+    attestation:
+      base-url: "http://attestation-service:8082"
