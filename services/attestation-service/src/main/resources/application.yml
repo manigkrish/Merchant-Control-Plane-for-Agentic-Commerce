@@ -66,6 +66,6 @@ agenttrust:
             keyId: "dev-ed25519-1"
             status: "ACTIVE"
             # Base64-encoded raw Ed25519 public key (32 bytes), no PEM.
-            publicKeyBase64: "REPLACE_ME_BASE64_PUBLIC_KEY"
+            publicKeyBase64: "Jh/apyRijwY9BU+iwfF/vWiGgKtuWk6xZoWnk+s4WQ4="
             # Optional: ISO-8601 timestamp; if set, key is invalid after this instant.
             # notAfter: "2026-12-31T23:59:59Z"
