@@ -163,7 +163,7 @@ Common `errorCode` values:
 - `ATTESTATION_INVALID_SIGNATURE`
 - `ATTESTATION_REPLAY_DETECTED`
 - `ATTESTATION_KEY_UNAVAILABLE` (no matching key for tenant/keyid)
-- `ATTESTATION_REDIS_UNAVAILABLE` (replay defense cannot access Redis; service fails closed)
+- `ATTESTATION_REPLAY_UNAVAILABLE` (replay defense cannot access Redis; service fails closed)
 
 ---
 
