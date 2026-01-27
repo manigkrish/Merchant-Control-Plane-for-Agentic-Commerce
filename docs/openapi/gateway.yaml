@@ -28,6 +28,8 @@ paths:
         Public data-plane entry point.
         Requires RFC 9421 HTTP Message Signature headers and a scoped permission token.
         Supports Idempotency-Key for safe retries.
+
+        Sprint 4 digest support: Content-Digest must use sha-256=:<base64>: only.
       security:
         - ScopedTokenHeader: []
       parameters:
@@ -37,19 +39,26 @@ paths:
           schema:
             type: string
           description: RFC 9421 Signature-Input header.
+
         - in: header
           name: Signature
           required: true
           schema:
             type: string
           description: RFC 9421 Signature header.
+
         - in: header
           name: Content-Digest
           required: true
           schema:
             type: string
-          description: >
-            HTTP Content-Digest header (required when a body is present). MUST be covered by the RFC 9421 signature.
+          description: |
+            HTTP Content-Digest header (required when a body is present).
+            MUST be covered by the RFC 9421 signature for this endpoint.
+
+            Sprint 4 supports only: sha-256=:<base64>:
+            Unsupported algorithms are rejected with 400 (errorCode=DIGEST_UNSUPPORTED).
+
         - in: header
           name: Idempotency-Key
           required: true
@@ -57,14 +66,41 @@ paths:
             type: string
             minLength: 16
             maxLength: 128
-            description: "Unique per logical request. Recommended: UUID v4."
+            description: Unique per logical request. Recommended: UUID v4.
           description: Idempotency key for safe retries and deduplication.
+
+        # Propagated (not required) observability headers
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: Optional correlation identifier for logs/traces.
+
+        - in: header
+          name: traceparent
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+          description: Optional W3C Trace Context traceparent header.
+
+        - in: header
+          name: tracestate
+          required: false
+          schema:
+            type: string
+            maxLength: 512
+          description: Optional W3C Trace Context tracestate header.
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/DecisionEvaluateRequest"
+
       responses:
         "200":
           description: Decision result
@@ -72,12 +108,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DecisionEvaluateResponse"
+
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -166,13 +205,27 @@ components:
         instance:
           type: string
           format: uri
+
+        errorCode:
+          type: string
+          nullable: true
+          description: Stable machine-readable error code.
         traceId:
           type: string
+          nullable: true
           description: Trace identifier for server-side debugging.
+        requestId:
+          type: string
+          nullable: true
+          description: Server-generated request identifier if available.
+        tenantId:
+          type: string
+          nullable: true
+          description: Derived tenant identifier when available.
         correlationId:
           type: string
           nullable: true
-          description: Client correlation id if provided (request body correlationId).
+          description: Client correlation id if provided (request body correlationId or X-Correlation-Id).
         idempotencyKey:
           type: string
           nullable: true
@@ -185,18 +238,28 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
+
     Unauthorized:
       description: Authentication failed
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
+
     Forbidden:
       description: Not authorized
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
+
+    Conflict:
+      description: Idempotency conflict (same Idempotency-Key reused for a different logical request)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
     TooManyRequests:
       description: Rate limit exceeded
       content:
