@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: AgentTrust Decision Service - Internal API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8083
 
@@ -10,43 +10,115 @@ paths:
     post:
       summary: Compute deterministic decision (internal)
       description: |
-        Internal API. Tenant context is derived from verified upstream identity / internal auth.
-        This API does not accept tenantId as a request parameter.
+        Internal API.
+
+        Tenant context is derived by gateway (Host -> tenant mapping) and propagated to this service via X-Tenant-Id.
+        This API does not accept tenantId in the request body.
+
+        Observability headers (X-Correlation-Id, traceparent, tracestate) are propagated end-to-end when present.
+
+        Digest support (Sprint 4): Content-Digest must use sha-256=:<base64>:.
       security:
-        - InternalBearerJWT: []
+        - ScopedTokenHeader: []
+      parameters:
+        - in: header
+          name: X-Tenant-Id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Tenant identifier derived by gateway. Must not come from request body.
+
+        - in: header
+          name: Signature-Input
+          required: true
+          schema:
+            type: string
+          description: RFC 9421 Signature-Input header (edge-supplied; forwarded by gateway).
+
+        - in: header
+          name: Signature
+          required: true
+          schema:
+            type: string
+          description: RFC 9421 Signature header (edge-supplied; forwarded by gateway).
+
+        - in: header
+          name: Content-Digest
+          required: true
+          schema:
+            type: string
+          description: |
+            HTTP Content-Digest header.
+
+            Sprint 4 supports only: sha-256=:<base64>:
+            Unsupported algorithms are rejected with 400 (DIGEST_UNSUPPORTED).
+
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+          description: |
+            Idempotency key for safe retries and deduplication.
+
+            For Sprint 4, method/path used in requestHash are external evaluate constants:
+            method=POST, path=/v1/agent/decisions/evaluate.
+
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
+          description: Optional correlation identifier for logs/traces.
+
+        - in: header
+          name: traceparent
+          required: false
+          schema:
+            type: string
+          description: Optional W3C Trace Context traceparent header.
+
+        - in: header
+          name: tracestate
+          required: false
+          schema:
+            type: string
+          description: Optional W3C Trace Context tracestate header.
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InternalDecisionRequest"
+              $ref: "#/components/schemas/DecisionEvaluateRequest"
       responses:
         "200":
           description: Decision computed
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InternalDecisionResponse"
+                $ref: "#/components/schemas/DecisionEvaluateResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
 components:
   securitySchemes:
-    InternalBearerJWT:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    ScopedTokenHeader:
+      type: apiKey
+      in: header
+      name: X-Scoped-Token
 
   schemas:
-    InternalDecisionRequest:
+    DecisionEvaluateRequest:
       type: object
-      required: [action, amount, currency, idempotencyKey]
+      required: [action, amount, currency]
       properties:
         action:
           type: string
@@ -64,21 +136,18 @@ components:
           description: ISO 4217 currency code (3-letter uppercase).
           pattern: "^[A-Z]{3}$"
           example: USD
-        idempotencyKey:
-          type: string
-          description: Idempotency key propagated from edge (derived from Idempotency-Key header).
-          example: idem_abc123
         correlationId:
           type: string
           nullable: true
-          description: Optional correlation id for cross-service tracing (not used for idempotency).
+          description: Optional client correlation id for linking logs/traces across systems (not used for idempotency).
           example: corr_abc123
-        policyVersion:
+        checkoutReference:
           type: string
           nullable: true
-          description: Optional policy version pin for deterministic evaluation.
+          description: Non-tenant business reference (order/cart/checkout id). Not used for tenant resolution.
+          example: order_9f2c1a
 
-    InternalDecisionResponse:
+    DecisionEvaluateResponse:
       type: object
       required: [decision, decisionId]
       properties:
@@ -91,6 +160,7 @@ components:
         tokenId:
           type: string
           nullable: true
+          description: Token identifier (not the raw token).
         reasonCode:
           type: string
           nullable: true
@@ -101,6 +171,7 @@ components:
       properties:
         type:
           type: string
+          format: uri
         title:
           type: string
         status:
@@ -109,17 +180,37 @@ components:
           type: string
         instance:
           type: string
+          format: uri
+
+        errorCode:
+          type: string
+          nullable: true
+          description: Stable machine-readable error code.
+
         traceId:
           type: string
+          nullable: true
           description: Trace identifier for server-side debugging.
+
+        requestId:
+          type: string
+          nullable: true
+          description: Server-generated request identifier if available.
+
+        tenantId:
+          type: string
+          nullable: true
+          description: Tenant id associated with the request when available.
+
         correlationId:
           type: string
           nullable: true
-          description: Client correlation id if provided.
+          description: Client correlation id if provided (request body correlationId or X-Correlation-Id).
+
         idempotencyKey:
           type: string
           nullable: true
-          description: Echo of the idempotency key when available.
+          description: Echo of the Idempotency-Key header when provided.
 
   responses:
     BadRequest:
@@ -134,14 +225,8 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
-    Forbidden:
-      description: Not authorized
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/ProblemDetails"
-    TooManyRequests:
-      description: Rate limit exceeded
+    Conflict:
+      description: Idempotency conflict
       content:
         application/problem+json:
           schema:
