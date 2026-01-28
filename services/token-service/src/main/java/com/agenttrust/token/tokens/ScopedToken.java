@@ -148,7 +148,9 @@ public class ScopedToken {
     }
 
     public boolean isExpiredAt(Instant now) {
-        return now.isAfter(expiresAt);
+        Objects.requireNonNull(now, "now");
+        // Expired at the boundary (now >= expiresAt)
+        return !now.isBefore(expiresAt);
     }
 
     public boolean isNotYetValidAt(Instant now) {

@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -54,6 +53,7 @@ public class ScopedTokenUsage {
     public ScopedTokenUsage(
             UUID tokenId,
             String tenantId,
+            Instant usedAt,
             String result,
             String reasonCode,
             String correlationId,
@@ -61,17 +61,11 @@ public class ScopedTokenUsage {
     ) {
         this.tokenId = Objects.requireNonNull(tokenId, "tokenId");
         this.tenantId = requireNonBlank(tenantId, "tenantId");
+        this.usedAt = Objects.requireNonNull(usedAt, "usedAt");
         this.result = requireNonBlank(result, "result");
         this.reasonCode = reasonCode;
         this.correlationId = correlationId;
         this.traceparent = traceparent;
-    }
-
-    @PrePersist
-    void onInsert() {
-        if (usedAt == null) {
-            usedAt = Instant.now();
-        }
     }
 
     public Long getId() {

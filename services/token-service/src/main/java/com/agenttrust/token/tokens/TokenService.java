@@ -124,6 +124,7 @@ public class TokenService {
         ValidateTokenRequest req = Objects.requireNonNull(request, "request");
 
         Instant now = Instant.now(clock);
+        Instant usedAt = now;
 
         String tokenHash = TokenHasher.sha256Hex(req.rawToken());
         Optional<ScopedToken> tokenOpt = tokenRepository.findByTenantIdAndTokenHash(t, tokenHash);
@@ -138,41 +139,41 @@ public class TokenService {
 
         // Option A invariant: merchant identity equals tenant identity.
         if (!t.equals(token.getMerchantId())) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_MERCHANT_MISMATCH, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_MERCHANT_MISMATCH, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_MERCHANT_MISMATCH);
         }
 
         if (token.isRevoked()) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_REVOKED, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_REVOKED, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_REVOKED);
         }
         if (token.isNotYetValidAt(now)) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_NOT_YET_VALID, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_NOT_YET_VALID, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_NOT_YET_VALID);
         }
         if (token.isExpiredAt(now)) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_EXPIRED, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_EXPIRED, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_EXPIRED);
         }
 
         if (!token.getAction().equals(req.action())) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_ACTION_MISMATCH, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_ACTION_MISMATCH, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_ACTION_MISMATCH);
         }
         if (!token.getCurrency().equals(req.currency())) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_CURRENCY_MISMATCH, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_CURRENCY_MISMATCH, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_CURRENCY_MISMATCH);
         }
         if (req.amount() == null || req.amount() < 0) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_AMOUNT_INVALID, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_AMOUNT_INVALID, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_AMOUNT_INVALID);
         }
         if (req.amount() > token.getMaxAmountMinor()) {
-            recordUsage(token, t, "INVALID", ReasonCodes.TOKEN_AMOUNT_EXCEEDS_LIMIT, correlationId, traceparent);
+            recordUsage(token, t, usedAt, "INVALID", ReasonCodes.TOKEN_AMOUNT_EXCEEDS_LIMIT, correlationId, traceparent);
             return ValidateTokenResponse.invalid(ReasonCodes.TOKEN_AMOUNT_EXCEEDS_LIMIT);
         }
 
-        recordUsage(token, t, "VALID", null, correlationId, traceparent);
+        recordUsage(token, t, usedAt, "VALID", null, correlationId, traceparent);
         return ValidateTokenResponse.valid(token.getTokenId(), token.getExpiresAt());
     }
 
@@ -198,6 +199,7 @@ public class TokenService {
     private void recordUsage(
             ScopedToken token,
             String tenantId,
+            Instant usedAt,
             String result,
             String reasonCode,
             String correlationId,
@@ -206,6 +208,7 @@ public class TokenService {
         ScopedTokenUsage usage = new ScopedTokenUsage(
                 token.getTokenId(),
                 tenantId,
+                usedAt,
                 result,
                 reasonCode,
                 correlationId,

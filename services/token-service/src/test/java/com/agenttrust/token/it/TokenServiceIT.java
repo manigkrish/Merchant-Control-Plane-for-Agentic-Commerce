@@ -107,6 +107,94 @@ class TokenServiceIT extends PostgresTestContainerSupport {
     }
 
     @Test
+    void currencyMismatch_returnsInvalidAndWritesUsage() throws Exception {
+        adjustableClock.setInstant(Instant.parse("2026-01-01T00:00:00Z"));
+
+        IssueTokenResponse issued = issueToken(new IssueTokenRequest(
+                "PURCHASE",
+                TENANT_ID,
+                5_000L,
+                "USD",
+                null,
+                3600L
+        ));
+
+        ValidateTokenResponse resp = validateToken(new ValidateTokenRequest(
+                "PURCHASE",
+                100L,
+                "EUR", // mismatch
+                issued.rawToken()
+        ), "corr_cur_1", sampleTraceparent());
+
+        assertThat(resp.valid()).isFalse();
+        assertThat(resp.reasonCode()).isEqualTo("TOKEN_CURRENCY_MISMATCH");
+
+        List<ScopedTokenUsage> usages = usageRepository.findByTokenIdOrderByUsedAtDesc(issued.tokenId());
+        assertThat(usages).hasSize(1);
+        assertThat(usages.get(0).getResult()).isEqualTo("INVALID");
+        assertThat(usages.get(0).getReasonCode()).isEqualTo("TOKEN_CURRENCY_MISMATCH");
+    }
+
+    @Test
+    void amountExceedsLimit_returnsInvalidAndWritesUsage() throws Exception {
+        adjustableClock.setInstant(Instant.parse("2026-01-01T00:00:00Z"));
+
+        IssueTokenResponse issued = issueToken(new IssueTokenRequest(
+                "PURCHASE",
+                TENANT_ID,
+                500L,     // limit
+                "USD",
+                null,
+                3600L
+        ));
+
+        ValidateTokenResponse resp = validateToken(new ValidateTokenRequest(
+                "PURCHASE",
+                501L,     // exceeds
+                "USD",
+                issued.rawToken()
+        ), "corr_amt_1", sampleTraceparent());
+
+        assertThat(resp.valid()).isFalse();
+        assertThat(resp.reasonCode()).isEqualTo("TOKEN_AMOUNT_EXCEEDS_LIMIT");
+
+        List<ScopedTokenUsage> usages = usageRepository.findByTokenIdOrderByUsedAtDesc(issued.tokenId());
+        assertThat(usages).hasSize(1);
+        assertThat(usages.get(0).getResult()).isEqualTo("INVALID");
+        assertThat(usages.get(0).getReasonCode()).isEqualTo("TOKEN_AMOUNT_EXCEEDS_LIMIT");
+    }
+
+    @Test
+    void notBefore_returnsInvalidAndWritesUsage() throws Exception {
+        adjustableClock.setInstant(Instant.parse("2026-01-01T00:00:00Z"));
+        Instant now = adjustableClock.instant();
+
+        IssueTokenResponse issued = issueToken(new IssueTokenRequest(
+                "PURCHASE",
+                TENANT_ID,
+                5_000L,
+                "USD",
+                now.plusSeconds(300), // not valid yet
+                3600L
+        ));
+
+        ValidateTokenResponse resp = validateToken(new ValidateTokenRequest(
+                "PURCHASE",
+                100L,
+                "USD",
+                issued.rawToken()
+        ), "corr_nb_1", sampleTraceparent());
+
+        assertThat(resp.valid()).isFalse();
+        assertThat(resp.reasonCode()).isEqualTo("TOKEN_NOT_YET_VALID");
+
+        List<ScopedTokenUsage> usages = usageRepository.findByTokenIdOrderByUsedAtDesc(issued.tokenId());
+        assertThat(usages).hasSize(1);
+        assertThat(usages.get(0).getResult()).isEqualTo("INVALID");
+        assertThat(usages.get(0).getReasonCode()).isEqualTo("TOKEN_NOT_YET_VALID");
+    }
+
+    @Test
     void expiry_isDeterministic_noSleeps() throws Exception {
         adjustableClock.setInstant(Instant.parse("2026-01-01T00:00:00Z"));
 
