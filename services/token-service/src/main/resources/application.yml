@@ -1,0 +1,36 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: token-service
+
+  # Token-service requires a DB for readiness (Flyway + JPA validate).
+  datasource:
+    # Prefer explicit service-specific vars, then fall back to standard Spring vars.
+    # Defaults are only for local compose-style environments.
+    url: ${TOKEN_DB_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/agenttrust}}
+    username: ${TOKEN_DB_USERNAME:${SPRING_DATASOURCE_USERNAME:agenttrust}}
+    password: ${TOKEN_DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD:agenttrust}}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
