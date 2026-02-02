@@ -3,9 +3,12 @@ package com.agenttrust.decision.clients;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
 import java.time.Duration;
 
 @Configuration
@@ -28,9 +31,15 @@ public class ClientsConfig {
     }
 
     private static RestClient buildRestClient(String baseUrl, Duration connectTimeout, Duration readTimeout) {
-        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
-        rf.setConnectTimeout((int) connectTimeout.toMillis());
-        rf.setReadTimeout((int) readTimeout.toMillis());
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(connectTimeout)
+                .build();
+
+        JdkClientHttpRequestFactory jdk = new JdkClientHttpRequestFactory(httpClient);
+        jdk.setReadTimeout(readTimeout);
+
+        // Buffering ensures we can reliably read response bodies in error handlers.
+        ClientHttpRequestFactory rf = new BufferingClientHttpRequestFactory(jdk);
 
         return RestClient.builder()
                 .baseUrl(baseUrl)
