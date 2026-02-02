@@ -26,3 +26,8 @@ agenttrust:
   decision:
     idempotency:
       ttlSeconds: ${DECISION_IDEMPOTENCY_TTL_SECONDS:900}
+    clients:
+      attestationBaseUrl: ${DECISION_ATTESTATION_BASE_URL:http://attestation-service:8082}
+      tokenBaseUrl: ${DECISION_TOKEN_BASE_URL:http://token-service:8084}
+      connectTimeout: 2s
+      readTimeout: 5s
