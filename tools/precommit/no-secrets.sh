@@ -45,7 +45,7 @@ done <<< "${STAGED_FILES}"
 # Patterns: AWS Access Key, generic "secret=" assignments, OpenAI key prefix, private key blocks.
 grep -nE 'AKIA[0-9A-Z]{16}' "${TMP}" && fail "Possible AWS access key detected (AKIA...)."
 grep -nE 'ASIA[0-9A-Z]{16}' "${TMP}" && fail "Possible AWS temporary access key detected (ASIA...)."
-grep -nE '-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----' "${TMP}" && fail "Private key material detected."
+grep -nE -- '-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----' "${TMP}" && fail "Private key material detected."
 grep -nE '\b(sk-[A-Za-z0-9]{20,})\b' "${TMP}" && fail "Possible OpenAI API key detected (sk-...)."
 grep -niE '\b(secret|password|token|api[_-]?key)\s*[:=]\s*[^\s]+' "${TMP}" && fail "Possible secret assignment detected."
 
