@@ -10,17 +10,34 @@ public final class Rfc9421SignatureBaseBuilder {
   /**
    * Builds the canonical signature base for the given covered components.
    *
-   * This implementation supports only the required derived components:
+   * Supported derived components:
    * - @authority
    * - @path
    * - @signature-params
    *
-   * Body-related components are intentionally not supported yet.
+   * Supported header component (when using the overload that supplies header value):
+   * - content-digest
+   *
+   * Note: This builder remains intentionally small and strict; any unsupported covered component
+   * fails closed with IllegalArgumentException.
    */
   public String build(String authority,
                       String path,
                       List<String> coveredComponents,
                       Rfc9421SignatureInput.SignatureParams params) {
+    return build(authority, path, coveredComponents, params, null);
+  }
+
+  /**
+   * Overload that can include the Content-Digest header value when "content-digest" is a covered component.
+   *
+   * @param contentDigestHeaderValue the exact Content-Digest header value (e.g. sha-256=:...:)
+   */
+  public String build(String authority,
+                      String path,
+                      List<String> coveredComponents,
+                      Rfc9421SignatureInput.SignatureParams params,
+                      String contentDigestHeaderValue) {
 
     if (isBlank(authority)) {
       throw new IllegalArgumentException("authority is required");
@@ -47,6 +64,9 @@ public final class Rfc9421SignatureBaseBuilder {
         appendLine(sb, "\"@path\": " + quote(normalizePath(path)));
       } else if ("@signature-params".equals(cl)) {
         appendLine(sb, "\"@signature-params\": " + buildSignatureParams(coveredComponents, params));
+      } else if ("content-digest".equals(cl)) {
+        String v = requireNonBlank(contentDigestHeaderValue, "contentDigest");
+        appendLine(sb, "\"content-digest\": " + quote(normalizeHeaderValue(v)));
       } else {
         throw new IllegalArgumentException("Unsupported covered component: " + component);
       }
@@ -101,6 +121,47 @@ public final class Rfc9421SignatureBaseBuilder {
   private static String normalizePath(String path) {
     // Keep path exactly; just trim whitespace. Callers must pass only path (no scheme/host).
     return path.trim();
+  }
+
+  /**
+   * Normalize header field value per our narrow needs:
+   * - trim leading/trailing whitespace
+   * - collapse internal whitespace to a single space
+   */
+  private static String normalizeHeaderValue(String value) {
+    String s = value.trim();
+    if (s.isEmpty()) {
+      return s;
+    }
+
+    StringBuilder out = new StringBuilder(s.length());
+    boolean prevWs = false;
+
+    for (int i = 0; i < s.length(); i++) {
+      char ch = s.charAt(i);
+      if (Character.isWhitespace(ch)) {
+        if (!prevWs) {
+          out.append(' ');
+          prevWs = true;
+        }
+      } else {
+        out.append(ch);
+        prevWs = false;
+      }
+    }
+
+    String normalized = out.toString().trim();
+    if (normalized.length() > 2048) {
+      throw new IllegalArgumentException("contentDigest is too large");
+    }
+    return normalized;
+  }
+
+  private static String requireNonBlank(String value, String field) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException(field + " is required when covered component is present");
+    }
+    return value;
   }
 
   private static boolean isBlank(String s) {

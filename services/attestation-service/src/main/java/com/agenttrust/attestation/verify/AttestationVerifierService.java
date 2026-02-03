@@ -51,9 +51,15 @@ public class AttestationVerifierService {
       labelValidator.assertSameLabel(parsedInput.label(), parsedSig.label());
 
       Rfc9421SignatureInput sigInput = parsedInput.input();
+
       Failure profileFailure = enforceProfile(sigInput);
       if (profileFailure != null) {
         return VerifyOutcome.failure(profileFailure);
+      }
+
+      Failure digestRequirementFailure = enforceContentDigestRequirementIfRequested(request, sigInput);
+      if (digestRequirementFailure != null) {
+        return VerifyOutcome.failure(digestRequirementFailure);
       }
 
       Failure timeFailure = enforceCreatedExpires(sigInput.params().created(), sigInput.params().expires());
@@ -67,14 +73,21 @@ public class AttestationVerifierService {
         return VerifyOutcome.failure(failure);
       }
 
+      // ✅ Sprint 4: include Content-Digest in canonical base when covered.
+      // Backwards compatible: if not covered, the builder ignores the provided value.
       String signatureBase = signatureBaseBuilder.build(
           request.authority(),
           request.path(),
           sigInput.coveredComponents(),
-          sigInput.params()
+          sigInput.params(),
+          request.contentDigest()
       );
 
-      boolean verified = ed25519Verifier.verify(resolved.key().orElseThrow().publicKey(), signatureBase, parsedSig.signatureBytes());
+      boolean verified = ed25519Verifier.verify(
+          resolved.key().orElseThrow().publicKey(),
+          signatureBase,
+          parsedSig.signatureBytes()
+      );
       if (!verified) {
         return VerifyOutcome.failure(Failure.of(FailureCode.ATTESTATION_INVALID_SIGNATURE, "signature verification failed"));
       }
@@ -82,7 +95,12 @@ public class AttestationVerifierService {
       if (props.getReplay().isEnabled()) {
         int ttlSeconds = computeReplayTtlSeconds(sigInput.params().expires());
         ReplayProtectionService.Result replayResult =
-            replayProtectionService.recordNonce(request.tenantId(), sigInput.params().keyId(), sigInput.params().nonce(), ttlSeconds);
+            replayProtectionService.recordNonce(
+                request.tenantId(),
+                sigInput.params().keyId(),
+                sigInput.params().nonce(),
+                ttlSeconds
+            );
 
         if (replayResult == ReplayProtectionService.Result.REPLAY_DETECTED) {
           return VerifyOutcome.failure(Failure.of(FailureCode.ATTESTATION_REPLAY_DETECTED, "nonce replay detected"));
@@ -109,6 +127,55 @@ public class AttestationVerifierService {
       // Fail closed for unexpected errors.
       return VerifyOutcome.failure(Failure.of(FailureCode.ATTESTATION_INTERNAL_ERROR, "internal attestation error"));
     }
+  }
+
+  /**
+   * Sprint 4 hook:
+   * If the caller requests digest coverage enforcement, ensure:
+   * - contentDigest is present
+   * - algorithm is sha-256 only (Sprint 4 scope)
+   * - "content-digest" is listed as a covered component
+   */
+  private Failure enforceContentDigestRequirementIfRequested(AttestationDtos.VerifyRequest request,
+                                                            Rfc9421SignatureInput sigInput) {
+    if (request == null || !request.requireContentDigestCovered()) {
+      return null;
+    }
+
+    String digest = request.contentDigest();
+    if (digest == null || digest.isBlank()) {
+      return Failure.of(FailureCode.ATTESTATION_MISSING_OR_INVALID,
+          "contentDigest is required when requireContentDigestCovered=true");
+    }
+
+    if (!isSupportedSha256ContentDigest(digest)) {
+      return Failure.of(FailureCode.ATTESTATION_MISSING_OR_INVALID,
+          "unsupported Content-Digest algorithm (Sprint 4 supports sha-256 only)");
+    }
+
+    boolean covered = false;
+    for (String c : sigInput.coveredComponents()) {
+      if (c != null && "content-digest".equalsIgnoreCase(c.trim())) {
+        covered = true;
+        break;
+      }
+    }
+
+    if (!covered) {
+      return Failure.of(FailureCode.ATTESTATION_MISSING_COMPONENT,
+          "missing required covered component: content-digest");
+    }
+
+    return null;
+  }
+
+  private static boolean isSupportedSha256ContentDigest(String value) {
+    String s = value.trim();
+    if (s.isEmpty() || s.length() > 512) {
+      return false;
+    }
+    String lower = s.toLowerCase(Locale.ROOT);
+    return lower.startsWith("sha-256=:") && s.endsWith(":");
   }
 
   private Failure enforceProfile(Rfc9421SignatureInput sigInput) {

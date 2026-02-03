@@ -37,12 +37,18 @@ public class AttestationVerifyController {
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = {MediaType.APPLICATION_JSON_VALUE, ProblemMediaTypes.APPLICATION_PROBLEM_JSON}
   )
-  public ResponseEntity<?> verify(@Valid @RequestBody AttestationDtos.VerifyRequest body,
-                                  HttpServletRequest request) {
-
+  public ResponseEntity<?> verify(
+      @Valid @RequestBody AttestationDtos.VerifyRequest body,
+      HttpServletRequest request
+  ) {
+    // Tenant context must be derived/propagated internally; never trust tenantId from any other place.
     request.setAttribute("agenttrust.tenantId", body.tenantId());
 
+    // IMPORTANT: Do not reconstruct VerifyRequest here.
+    // The VerifyRequest record now includes optional contentDigest + requireContentDigestCovered.
+    // Jackson will populate them (or default to null/false) and we pass through as-is.
     VerifyOutcome outcome = verifier.verify(body);
+
     if (outcome.verified()) {
       return ResponseEntity.ok(new AttestationDtos.VerifyResponse(true));
     }

@@ -18,8 +18,10 @@ public final class DecisionClientsDtos {
     /**
      * Matches attestation-service POST /v1/attestations/verify request shape.
      *
-     * IMPORTANT (from existing tests/docs): constructor order is:
-     * (method, authority, path, tenantId, signatureInput, signature)
+     * IMPORTANT:
+     * - contentDigest is optional unless requireContentDigestCovered=true.
+     * - For the external evaluate flow, decision-service will set requireContentDigestCovered=true
+     *   and pass the Content-Digest header value through.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record AttestationVerifyRequest(
@@ -27,6 +29,8 @@ public final class DecisionClientsDtos {
             String authority,
             String path,
             String tenantId,
+            String contentDigest,
+            boolean requireContentDigestCovered,
             @JsonProperty("signatureInput") String signatureInput,
             @JsonProperty("signature") String signature
     ) {

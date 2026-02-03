@@ -59,7 +59,13 @@ public class DecisionController {
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId,
             @RequestHeader(value = "traceparent", required = false) String traceparent,
             @RequestHeader(value = "tracestate", required = false) String tracestate,
+
+            // NOTE: gateway will pass the external authority here (Host is not reliable across internal hops).
+            @RequestHeader(value = "X-External-Authority", required = false) String externalAuthority,
+
+            // Still accept Host for tests / direct calls.
             @RequestHeader(value = "Host", required = false) String hostHeader,
+
             @Valid @RequestBody DecisionRequest request
     ) {
         byte[] bodyBytes = decodeBase64(request.bodyBytesBase64());
@@ -78,11 +84,13 @@ public class DecisionController {
                     .body(r.bodyBytes());
         }
 
-        String authority = (hostHeader != null && !hostHeader.isBlank()) ? hostHeader : "unknown";
+        String authority = firstNonBlank(externalAuthority, hostHeader, "unknown");
 
         attestationClient.verifyOrThrow(
                 tenantId,
                 authority,
+                request.contentDigest(),
+                true,
                 request.signatureInput(),
                 request.signature(),
                 correlationId,
@@ -149,6 +157,12 @@ public class DecisionController {
         return ResponseEntity.badRequest()
                 .contentType(PROBLEM_JSON)
                 .body(json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String firstNonBlank(String a, String b, String fallback) {
+        if (a != null && !a.isBlank()) return a;
+        if (b != null && !b.isBlank()) return b;
+        return fallback;
     }
 
     private byte[] decodeBase64(String b64) {

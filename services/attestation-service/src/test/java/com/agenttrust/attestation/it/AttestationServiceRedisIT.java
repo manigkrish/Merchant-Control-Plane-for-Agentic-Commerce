@@ -144,12 +144,15 @@ class AttestationServiceRedisIT {
     String signatureHeader = "sig1=:" + Base64.getEncoder().encodeToString(signatureBytes) + ":";
 
     // VerifyRequest order (REQUIRED):
-    // (method, authority, path, tenantId, signatureInput, signature)
+    // (method, authority, path, tenantId, contentDigest, requireContentDigestCovered, signatureInput, signature)
+    // This IT is bodyless, so contentDigest=null and requireContentDigestCovered=false.
     AttestationDtos.VerifyRequest req = new AttestationDtos.VerifyRequest(
         "POST",
         authority,
         path,
         TENANT_ID,
+        null,
+        false,
         sigInputHeader,
         signatureHeader
     );

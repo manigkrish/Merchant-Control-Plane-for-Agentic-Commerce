@@ -42,6 +42,8 @@ public class AttestationClient {
     public void verifyOrThrow(
             String tenantId,
             String authority,
+            String contentDigest,
+            boolean requireContentDigestCovered,
             String signatureInput,
             String signature,
             String correlationId,
@@ -56,6 +58,8 @@ public class AttestationClient {
                 requireNonBlank(authority, "authority"),
                 path,
                 requireNonBlank(tenantId, "tenantId"),
+                contentDigest,
+                requireContentDigestCovered,
                 requireNonBlank(signatureInput, "Signature-Input"),
                 requireNonBlank(signature, "Signature")
         );
