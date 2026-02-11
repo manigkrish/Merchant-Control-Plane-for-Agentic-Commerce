@@ -26,18 +26,33 @@ paths:
       summary: Evaluate an agent-initiated commerce action
       description: |
         Public data-plane entry point.
-        Requires RFC 9421 HTTP Message Signature headers and a scoped permission token.
-        Supports Idempotency-Key for safe retries.
 
-        Sprint 4 digest support: Content-Digest must use sha-256=:<base64>: only.
+        Requires:
+        - RFC 9421 HTTP Message Signature headers (Signature-Input, Signature)
+        - X-Scoped-Token
+        - Content-Digest (sha-256 only in Sprint 4)
+        - Idempotency-Key for safe retries
+
+        Notes:
+        - Content-Digest must be covered by the RFC 9421 signature for this endpoint.
+        - Sprint 4 supports only: Content-Digest: sha-256=:<base64>:
       security:
         - ScopedTokenHeader: []
       parameters:
+        - in: header
+          name: X-Scoped-Token
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Scoped permission token for the requested action.
+
         - in: header
           name: Signature-Input
           required: true
           schema:
             type: string
+            minLength: 1
           description: RFC 9421 Signature-Input header.
 
         - in: header
@@ -45,6 +60,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
           description: RFC 9421 Signature header.
 
         - in: header
@@ -52,6 +68,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
           description: |
             HTTP Content-Digest header (required when a body is present).
             MUST be covered by the RFC 9421 signature for this endpoint.
@@ -66,8 +83,7 @@ paths:
             type: string
             minLength: 16
             maxLength: 128
-            description: Unique per logical request. Recommended: UUID v4.
-          description: Idempotency key for safe retries and deduplication.
+          description: Idempotency key for safe retries and deduplication. Recommended: UUID v4.
 
         # Propagated (not required) observability headers
         - in: header
@@ -119,6 +135,10 @@ paths:
           $ref: "#/components/responses/Conflict"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
 components:
   securitySchemes:
@@ -151,7 +171,7 @@ components:
         correlationId:
           type: string
           nullable: true
-          description: Optional client correlation id for linking logs/traces across systems (not used for idempotency).
+          description: Optional client correlation id for linking logs/traces (not used for idempotency).
           example: corr_abc123
         checkoutReference:
           type: string
@@ -168,7 +188,8 @@ components:
           enum: [ALLOW, CHALLENGE, DENY]
         decisionId:
           type: string
-          example: dec_01HXYZ...
+          description: Server-generated decision identifier.
+          example: "7b8f3f7d-1dc0-4f41-9d2b-4c3c0f7f1c1a"
         tokenId:
           type: string
           nullable: true
@@ -181,6 +202,7 @@ components:
           nullable: true
         citations:
           type: array
+          nullable: true
           items:
             type: object
             properties:
@@ -206,10 +228,15 @@ components:
           type: string
           format: uri
 
+        # Platform extensions (RFC 9457 + platform-web)
         errorCode:
           type: string
           nullable: true
           description: Stable machine-readable error code.
+        reasonCode:
+          type: string
+          nullable: true
+          description: Optional machine-readable reason for auth failures (e.g., TOKEN_EXPIRED).
         traceId:
           type: string
           nullable: true
@@ -240,7 +267,7 @@ components:
             $ref: "#/components/schemas/ProblemDetails"
 
     Unauthorized:
-      description: Authentication failed
+      description: Authentication failed (attestation invalid or token invalid)
       content:
         application/problem+json:
           schema:
@@ -254,7 +281,10 @@ components:
             $ref: "#/components/schemas/ProblemDetails"
 
     Conflict:
-      description: Idempotency conflict (same Idempotency-Key reused for a different logical request)
+      description: |
+        Conflict.
+        - Idempotency conflict (same Idempotency-Key reused for a different logical request), OR
+        - Attestation replay detected (nonce replay)
       content:
         application/problem+json:
           schema:
@@ -262,6 +292,20 @@ components:
 
     TooManyRequests:
       description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    ServiceUnavailable:
+      description: Temporary unavailability (e.g., replay protection unavailable)
       content:
         application/problem+json:
           schema:

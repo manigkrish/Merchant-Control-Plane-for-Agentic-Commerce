@@ -1,0 +1,219 @@
+openapi: 3.0.3
+info:
+  title: AgentTrust Decision Service (Internal API)
+  version: 0.1.0
+  description: |
+    Internal-only API used by gateway-service to evaluate an incoming agent request.
+
+    Notes:
+    - This endpoint is intended for service-to-service traffic inside the control plane.
+    - If the scoped token is invalid/expired/revoked, the service responds 200 with a DENY decision (not a 401).
+    - Attestation verification failures (e.g., invalid signature / replay detected) are returned as application/problem+json.
+
+servers:
+  - url: http://localhost:8083
+
+paths:
+  /internal/v1/decisions:
+    post:
+      operationId: decide
+      summary: Evaluate a request and return ALLOW/CHALLENGE/DENY
+      description: |
+        Evaluates a request by verifying attestation first, then validating the scoped token (if attestation succeeds).
+      tags: [Decision]
+      parameters:
+        - $ref: "#/components/parameters/XTenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/XCorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Decision result (including DENY for invalid token cases)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionResponse"
+        "400":
+          description: Invalid request (validation error)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          description: Unauthorized (typically attestation failure mapped to 401)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "403":
+          description: Forbidden (tenant/authz policy)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "409":
+          description: Conflict (e.g., nonce replay detected)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          description: Service unavailable (e.g., replay protection unavailable)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+components:
+  parameters:
+    XTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+      description: Tenant identifier derived/propagated by trusted internal callers.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+      description: Idempotency key for safe retries.
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Optional correlation identifier propagated end-to-end.
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: W3C Trace Context traceparent header.
+
+  schemas:
+    DecisionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - amount
+        - currency
+        - rawScopedToken
+        - signatureInput
+        - signature
+      properties:
+        action:
+          type: string
+          maxLength: 64
+          description: Business action being requested (e.g., PURCHASE).
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Amount in minor units (e.g., cents) if applicable.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO-4217 currency code.
+        rawScopedToken:
+          type: string
+          maxLength: 8192
+          description: Opaque scoped token presented by the agent/client.
+        contentDigest:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Optional Content-Digest header value (RFC 9530 style), if used.
+        bodyBytesBase64:
+          type: string
+          maxLength: 16384
+          nullable: true
+          description: Optional base64 of canonical request body bytes when body-bound signatures are used.
+        signatureInput:
+          type: string
+          maxLength: 8192
+          description: Signature-Input header value (RFC 9421).
+        signature:
+          type: string
+          maxLength: 8192
+          description: Signature header value (RFC 9421).
+
+    DecisionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum: [ALLOW, CHALLENGE, DENY]
+        reasonCode:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: Optional machine-readable reason for the decision (implementation-defined).
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          description: Problem type URI.
+        title:
+          type: string
+          description: Short, human-readable summary.
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code.
+        detail:
+          type: string
+          nullable: true
+          description: Human-readable explanation specific to this occurrence.
+        instance:
+          type: string
+          nullable: true
+          description: URI reference identifying the specific occurrence.
+        errorCode:
+          type: string
+          nullable: true
+          description: Stable, service-defined error code.
+        traceId:
+          type: string
+          nullable: true
+          description: Trace identifier (W3C Trace Context derived).
+        requestId:
+          type: string
+          nullable: true
+          description: Request identifier (correlation/request id).
+        tenantId:
+          type: string
+          nullable: true
+          description: Tenant identifier associated with the request.

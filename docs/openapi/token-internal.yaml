@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: AgentTrust Token Service (Internal API)
+  version: 0.1.0
+  description: |
+    Internal-only API used by decision-service to validate scoped (opaque) tokens.
+    This service issues an opaque token once at creation time, and persists only a hash (never the raw token).
+
+servers:
+  - url: http://localhost:8084
+
+paths:
+  /internal/v1/tokens/validate:
+    post:
+      operationId: validateScopedToken
+      summary: Validate an opaque scoped token for a given request context
+      tags: [Tokens]
+      parameters:
+        - $ref: "#/components/parameters/XTenantId"
+        - $ref: "#/components/parameters/XCorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
+        - $ref: "#/components/parameters/Tracestate"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenValidateRequest"
+      responses:
+        "200":
+          description: Validation result (valid=true/false with reasonCode when invalid)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenValidateResponse"
+        "400":
+          description: Invalid request (validation error / malformed token format)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          description: Unauthorized (reserved for future auth; not used for token invalid in Sprint 4)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /internal/v1/tokens/issue:
+    post:
+      operationId: issueScopedToken
+      summary: Issue an opaque scoped token (local/test only)
+      description: |
+        Enabled only under local/test profiles in Sprint 4.
+        Returns the raw stkn_* token once. The service persists only tokenHash.
+      tags: [Tokens]
+      parameters:
+        - $ref: "#/components/parameters/XTenantId"
+        - $ref: "#/components/parameters/XCorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
+        - $ref: "#/components/parameters/Tracestate"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenIssueRequest"
+      responses:
+        "200":
+          description: Token issued (raw token returned once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenIssueResponse"
+        "400":
+          description: Invalid request (validation error)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "403":
+          description: Forbidden (endpoint disabled outside local/test)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+components:
+  parameters:
+    XTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+      description: Tenant identifier derived/propagated by trusted internal callers.
+
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Optional correlation identifier propagated end-to-end.
+
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: W3C Trace Context traceparent header.
+
+    Tracestate:
+      name: tracestate
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: W3C Trace Context tracestate header.
+
+  schemas:
+    TokenValidateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - rawScopedToken
+        - action
+        - amount
+        - currency
+      properties:
+        rawScopedToken:
+          type: string
+          maxLength: 8192
+          description: Raw opaque token value (stkn_*) as presented by the client.
+        action:
+          type: string
+          maxLength: 64
+          description: Business action to authorize (e.g., PURCHASE).
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Amount in minor units (e.g., cents).
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO-4217 currency code.
+
+    TokenValidateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - valid
+      properties:
+        valid:
+          type: boolean
+        tokenId:
+          type: string
+          maxLength: 64
+          nullable: true
+          description: Stable identifier for the token (not the raw token).
+        reasonCode:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: Reason when valid=false (TOKEN_EXPIRED, TOKEN_REVOKED, TOKEN_NOT_FOUND, etc.).
+
+    TokenIssueRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - amount
+        - currency
+      properties:
+        action:
+          type: string
+          maxLength: 64
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        ttlSeconds:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 86400
+          nullable: true
+          description: Optional TTL override for local/test issuance.
+
+    TokenIssueResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - tokenId
+        - rawScopedToken
+      properties:
+        tokenId:
+          type: string
+          maxLength: 64
+        rawScopedToken:
+          type: string
+          maxLength: 8192
+          description: Raw opaque token returned once at issue time (stkn_*).
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        traceId:
+          type: string
+          nullable: true
+        requestId:
+          type: string
+          nullable: true
+        tenantId:
+          type: string
+          nullable: true
