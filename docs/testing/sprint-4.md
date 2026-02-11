@@ -97,7 +97,6 @@ curl -i \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json,application/problem+json' \
   -H 'Idempotency-Key: idem-1' \
-  -H 'X-Scoped-Token: <SCOPED_TOKEN>' \
   -H 'X-Scoped-Token: <REPLACE_WITH_SCOPED_TOKEN>' \
   -H 'Content-Digest: sha-256=:REPLACE_WITH_REAL_BASE64_DIGEST=:' \
   -H 'Signature-Input: sig1=(\"@authority\" \"@path\" \"@signature-params\");created=...;expires=...;keyid=\"...\";alg=\"ed25519\";nonce=\"...\";tag=\"...\"' \
