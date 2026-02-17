@@ -93,6 +93,55 @@ services:
     expose:
       - "8082"
 
+  token-service:
+    image: maven:3.9.9-eclipse-temurin-21
+    container_name: agenttrust-token
+    working_dir: /workspace/services/token-service
+    volumes:
+      - ../../:/workspace
+      - maven_cache:/root/.m2
+    environment:
+      # Standard Spring Boot datasource env vars (no custom code required)
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-agenttrust}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-agenttrust}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-agenttrust}
+    command: ["mvn", "-q", "spring-boot:run"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Internal-only: do NOT publish 8084 to host.
+    expose:
+      - "8084"
+
+  decision-service:
+    image: maven:3.9.9-eclipse-temurin-21
+    container_name: agenttrust-decision
+    working_dir: /workspace/services/decision-service
+    volumes:
+      - ../../:/workspace
+      - maven_cache:/root/.m2
+    environment:
+      # Standard Spring Boot redis env vars
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+
+      # Client base URLs for internal calls (set in case your config binds to these)
+      AGENTTRUST_DECISION_CLIENTS_ATTESTATION_BASE_URL: http://attestation-service:8082
+      AGENTTRUST_DECISION_CLIENTS_TOKEN_BASE_URL: http://token-service:8084
+    command: ["mvn", "-q", "spring-boot:run"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      token-service:
+        condition: service_started
+      attestation-service:
+        condition: service_started
+    restart: unless-stopped
+    # Internal-only: do NOT publish 8083 to host.
+    expose:
+      - "8083"
+
   gateway-service:
     image: maven:3.9.9-eclipse-temurin-21
     container_name: agenttrust-gateway
@@ -100,9 +149,12 @@ services:
     volumes:
       - ../../:/workspace
       - maven_cache:/root/.m2
+    environment:
+      # If your gateway client config binds to this, it will route to decision-service over the compose network.
+      AGENTTRUST_GATEWAY_DECISION_BASE_URL: http://decision-service:8083
     command: ["mvn", "-q", "spring-boot:run"]
     depends_on:
-      attestation-service:
+      decision-service:
         condition: service_started
       redis:
         condition: service_healthy

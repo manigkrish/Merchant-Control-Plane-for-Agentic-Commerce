@@ -1,0 +1,33 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: decision-service
+
+  data:
+    redis:
+      # Prefer explicit vars, then fall back to common Spring vars.
+      host: ${DECISION_REDIS_HOST:${SPRING_REDIS_HOST:redis}}
+      port: ${DECISION_REDIS_PORT:${SPRING_REDIS_PORT:6379}}
+      timeout: 2s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+agenttrust:
+  decision:
+    idempotency:
+      ttlSeconds: ${DECISION_IDEMPOTENCY_TTL_SECONDS:900}
+    clients:
+      attestationBaseUrl: ${DECISION_ATTESTATION_BASE_URL:http://attestation-service:8082}
+      tokenBaseUrl: ${DECISION_TOKEN_BASE_URL:http://token-service:8084}
+      connectTimeout: 2s
+      readTimeout: 5s

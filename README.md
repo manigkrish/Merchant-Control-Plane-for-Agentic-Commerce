@@ -11,6 +11,7 @@ As automated agents increasingly browse and transact on behalf of users, merchan
 
 - verify requests are authentic (cryptographically signed) and not replayed
 - enforce least-privilege permissions (scoped tokens bounded by action/amount/time/merchant)
+- ensure safe retries using idempotency (same request semantics → same response)
 - produce auditable decisions for disputes and governance
 - support operations workflows via automation without expanding the attack surface
 
@@ -29,17 +30,21 @@ This repository is built sprint-by-sprint toward these capabilities:
    - Issue / use / revoke with immutable audit trail
    - Lifecycle events emitted through Kafka using a CloudEvents envelope
 
-3. **Policy-RAG explanations with citations**
+3. **Deterministic decisions + idempotency**
+   - Decision evaluation with stable request identity (no signature freshness fields in idempotency keys)
+   - Redis-backed idempotency store to support safe retries
+
+4. **Policy-RAG explanations with citations**
    - Versioned merchant policy documents
    - Retrieval + explanation generation with citations to relevant policy chunks
    - LLM is used for explanations; authoritative allow/deny logic remains deterministic
 
-4. **Guardrailed ops agent**
+5. **Guardrailed ops agent**
    - Allowlisted tools only
    - JSON schema validation for tool arguments
    - RBAC gating, idempotency keys, and audit logs for every action
 
-5. **Operational readiness**
+6. **Operational readiness**
    - SLOs, dashboards, alerting
    - Blue/green deployments (ECS + CodeDeploy)
    - Load testing and failure-mode testing (LLM down, Redis down, Kafka backlog, DB failover)
@@ -74,7 +79,7 @@ This repository is built sprint-by-sprint toward these capabilities:
   - Admin: health + correlation/trace headers present
 
 ### Sprint 2
-- **Control-plane auth MVP (Option A)**
+- **Control-plane auth MVP**
   - `POST /v1/admin/auth/login` issues **RS256 JWTs** (default TTL: 15 minutes)
   - `GET /.well-known/jwks.json` serves **JWKS** for signature verification
   - Bootstrap platform admin supported via configuration/env (password stored as hash in DB)
@@ -120,13 +125,47 @@ This repository is built sprint-by-sprint toward these capabilities:
   - Structured security audit logs + metrics-ready counters
   - DB-backed immutable audit trail for data-plane events comes later
 
+### Sprint 4
+- **Decision path MVP (end-to-end, deterministic)**
+  - New runnable services:
+    - `decision-service` (internal; default port `8083`)
+    - `token-service` (internal; default port `8084`)
+  - New gateway endpoint:
+    - `POST /v1/agent/decisions/evaluate`
+- **Tenant propagation invariant**
+  - Gateway derives tenantId (from `Host` / authority mapping) and passes it to decision-service via an internal header (e.g., `X-Tenant-Id`).
+  - Decision-service never accepts tenantId from request body.
+- **Body identity + Content-Digest**
+  - Sprint 4 supports `Content-Digest: sha-256=:base64:` only.
+  - Digest is verified against the actual request body bytes before it is used for request identity / hashing.
+- **Idempotency (Redis-backed, safe retries)**
+  - Idempotency keying is based on semantic identity, not cryptographic freshness:
+    - requestHash uses only stable inputs (tenantId + external method/path constants + raw scoped token value + verified body identity).
+    - requestHash explicitly does **not** include `Signature` / `Signature-Input`.
+  - Cached-hit behavior:
+    - if `(tenantId, Idempotency-Key, requestHash)` exists, decision-service returns the cached response immediately (no re-calls to attestation/token).
+  - Conflict behavior:
+    - if the same `(tenantId, Idempotency-Key)` is reused with a different requestHash, return `409 application/problem+json`.
+- **Token validation contract alignment**
+  - token-service internal validation returns a structured result (`valid=false` with `reasonCode` etc.) rather than failing the request.
+  - decision-service maps token invalid/expired/revoked into `401 application/problem+json` for the caller-facing decision outcome.
+- **Contract completeness**
+  - Gateway + decision OpenAPI include Problem Details responses for:
+    - `400` (missing headers, digest mismatch, invalid format, unsupported digest algorithm)
+    - `401` (attestation invalid, token invalid)
+    - `409` (idempotency conflict)
+  - Internal calls propagate observability headers (`X-Correlation-Id`, `traceparent`, `tracestate`) as optional-but-preserved.
+
 ---
 
 ## High-level architecture
 
-- **Gateway (data plane)**: public edge for agent traffic (`/v1/agent/*`). Validates attestations, enforces replay protection and scoped tokens, orchestrates
-deterministic decisions, and emits auditable events.
-- **Admin (control plane)**: merchant onboarding and configuration (`/v1/admin/*`). Manages policies, keys, token administration, RBAC, and audit review.
+- **Gateway (data plane)**: public edge for agent traffic (`/v1/agent/*`). Derives tenant, validates request shape, orchestrates deterministic decision evaluation, and passes through RFC 9457 errors.
+- **Decision (data plane internal)**: evaluates a request deterministically by calling:
+  - attestation verification (RFC 9421)
+  - token validation (scoped token)
+  - idempotency store (Redis) for safe retries
+- **Token (data plane internal)**: issues and validates scoped tokens. The raw `stkn_*` value is returned only at issue time; persistent storage is tokenHash only.
 - **Attestation (data plane internal)**: verifies HTTP Message Signatures and enforces replay defense.
 
 The canonical architecture diagram is in `docs/architecture/diagram.md` (Mermaid).
@@ -160,7 +199,8 @@ agenttrust-gateway/
 │     ├─ strategy.md
 │     ├─ sprint-1.md
 │     ├─ sprint-2.md
-│     └─ sprint-3.md
+│     ├─ sprint-3.md
+│     └─ sprint-4.md
 │
 ├─ libs/
 │  ├─ platform-web/
@@ -192,7 +232,7 @@ agenttrust-gateway/
    └─ workflows/
 ```
 
-Note: the runnable services implemented so far are `gateway-service`, `admin-service`, and `attestation-service`.
+Note: the runnable services implemented so far are `gateway-service`, `admin-service`, `attestation-service`, `decision-service`, and `token-service`.
 
 ---
 
@@ -271,9 +311,20 @@ cp infra/docker-compose/.env.example infra/docker-compose/.env
 Recommended local order (data plane first):
 
 1. Redis (via Docker Compose)
-2. `attestation-service`
-3. `gateway-service`
-4. `admin-service`
+2. `token-service`
+3. `attestation-service`
+4. `decision-service`
+5. `gateway-service`
+6. `admin-service`
+
+> Tip: if you run some services in Docker Compose and others on your host, ensure base URLs / ports match your local configuration.
+
+### Token (default port 8084)
+
+```bash
+cd services/token-service
+mvn -q spring-boot:run
+```
 
 ### Attestation (port 8082)
 
@@ -284,18 +335,21 @@ cd services/attestation-service
 ATTESTATION_REDIS_HOST=localhost mvn -q spring-boot:run
 ```
 
-### Gateway (port 8080)
+### Decision (default port 8083)
 
-In a second terminal:
+```bash
+cd services/decision-service
+mvn -q spring-boot:run
+```
+
+### Gateway (port 8080)
 
 ```bash
 cd services/gateway-service
-AGENTTRUST_ATTESTATION_CLIENT_BASE_URL=http://localhost:8082 mvn -q spring-boot:run
+mvn -q spring-boot:run
 ```
 
 ### Admin (port 8081)
-
-In a third terminal:
 
 ```bash
 cd services/admin-service
@@ -324,9 +378,51 @@ Examples:
 curl -sS http://localhost:8080/healthz | jq .
 curl -sS http://localhost:8081/healthz | jq .
 curl -sS http://localhost:8082/healthz | jq .
+curl -sS http://localhost:8083/healthz | jq .
+curl -sS http://localhost:8084/healthz | jq .
 ```
 
 Note: `admin-service` readiness is designed to fail if the database is unavailable.
+
+---
+
+## Data-plane decision evaluation (Sprint 4)
+
+### Gateway entrypoint
+
+Gateway exposes:
+
+- `POST /v1/agent/decisions/evaluate`
+
+Expected high-level requirements:
+
+- request is cryptographically signed (`Signature-Input`, `Signature`)
+- request includes an idempotency key (`Idempotency-Key`)
+- request includes a body identity (`Content-Digest`, `sha-256` only)
+
+The most reliable way to validate correctness end-to-end is to run tests, because generating a correct RFC 9421 signature by hand is easy to get wrong.
+
+### Decision internal API (JSON, internal-only)
+
+Decision service exposes:
+
+- `POST /internal/v1/decisions`
+
+Gateway calls this internally with a minimal payload including:
+
+- derived tenant header `X-Tenant-Id`
+- idempotency key `Idempotency-Key`
+- base64 of the request body bytes + `Content-Digest`
+- signature headers (`Signature-Input`, `Signature`)
+
+Decision-service:
+
+- verifies digest vs body bytes before using body identity for hashing
+- enforces idempotency:
+
+  - same key + same requestHash → return cached response
+  - same key + different requestHash → `409 application/problem+json`
+- calls attestation-service and token-service on first execution only
 
 ---
 
@@ -334,7 +430,7 @@ Note: `admin-service` readiness is designed to fail if the database is unavailab
 
 ### Gateway entrypoint (bodyless)
 
-Gateway exposes:
+Gateway also exposes:
 
 - `POST /v1/agent/verify`
 
@@ -343,9 +439,7 @@ This endpoint is **bodyless** and expects the signature headers:
 - `Signature-Input`
 - `Signature`
 
-The gateway also derives tenant from `Host` / `@authority` using a config mapping.
-
-In Sprint 3, the most reliable way to validate correctness end-to-end is to run tests, because generating a correct RFC 9421 signature by hand is easy to get wrong.
+The gateway derives tenant from `Host` / `@authority` using a config mapping.
 
 ### Attestation internal API (JSON, internal-only)
 
@@ -353,7 +447,7 @@ Attestation service exposes:
 
 - `POST /v1/attestations/verify`
 
-Gateway calls this internally with a minimal payload (method, authority, path, tenantId, signature headers).
+Gateway (and decision-service where applicable) call this internally with a minimal payload (method, authority, path, tenantId, signature headers).
 
 ---
 
@@ -467,6 +561,8 @@ Run service tests only:
 ```bash
 mvn -q -pl services/admin-service -am test
 mvn -q -pl services/attestation-service -am test
+mvn -q -pl services/token-service -am test
+mvn -q -pl services/decision-service -am test
 mvn -q -pl services/gateway-service -am test
 ```
 
@@ -492,11 +588,25 @@ What Sprint 3 tests validate:
 - Invalid signature returns RFC 9457 Problem Details with stable `errorCode`
 - Gateway delegates to attestation-service and passes through Problem Details correctly
 
+What Sprint 4 tests validate:
+
+- Decision-service idempotency behavior:
+
+  - idempotency hit returns cached response without re-calling downstream services
+  - idempotency reuse conflict returns `409 application/problem+json`
+- Digest enforcement:
+
+  - `Content-Digest` is required, must be `sha-256`, and must match body bytes
+- Downstream pass-through:
+
+  - attestation/token failures are expressed as RFC 9457 Problem Details at the gateway edge
+
 See:
 
 - `docs/testing/sprint-1.md`
 - `docs/testing/sprint-2.md`
 - `docs/testing/sprint-3.md`
+- `docs/testing/sprint-4.md`
 
 ---
 
@@ -521,6 +631,7 @@ See:
 - No secrets committed. Use local `.env` (gitignored) and GitHub Actions secrets where needed.
 - CI-to-AWS authentication is planned via GitHub Actions OIDC (no long-lived AWS keys).
 - Tenant context is first-class; tenant will be derived from verified identity (JWT) and never trusted from request body.
+- Idempotency keys are based on stable request identity (not signature freshness fields).
 - LLM usage will include strict redaction and audit logging; only allowed data is sent to the provider.
 
 See:
@@ -535,11 +646,11 @@ See:
 
 - Internal auth (JWT + JWKS) and tenant derivation (implemented)
 - Attestation verification service + Redis replay cache (implemented)
+- Token service (issue + validate, scoped tokens) (implemented MVP)
+- Decision service (deterministic decision + idempotency + downstream orchestration) (implemented MVP)
 - Agent registry (key resolution and rotation)
-- Scoped token service + lifecycle events (Kafka/CloudEvents)
 - Policy service + Python ingestion worker (chunking + embeddings + pgvector)
 - RAG service for explanations with citations
-- Decision service orchestration (deterministic ALLOW/CHALLENGE/DENY)
 - Guardrailed ops agent service (allowlisted tools + schema validation + idempotency + audit)
 - Deployment (ECS + CodeDeploy blue/green), dashboards/alerts, and failure testing
 

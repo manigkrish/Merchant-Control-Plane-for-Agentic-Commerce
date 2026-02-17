@@ -15,10 +15,60 @@
 
   <artifactId>decision-service</artifactId>
   <name>AgentTrust Decision Service</name>
-  <description>Decision orchestration service (placeholder module scaffold).</description>
+  <description>Orchestrates attestation + token validation + idempotency and returns deterministic decisions.</description>
 
   <dependencies>
-    <!-- empty on purpose: module scaffold only to keep Maven reactor buildable -->
+    <!-- HTTP API (internal endpoint) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Health endpoints + metrics hooks -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Request validation -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Redis for idempotency -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- Shared platform conventions (Problem Details, correlation/trace filter) -->
+    <dependency>
+      <groupId>com.agenttrust</groupId>
+      <artifactId>platform-web</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Test: Spring Boot test + Testcontainers (Redis via GenericContainer in Chunk 7) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
